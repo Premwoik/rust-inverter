@@ -54,6 +54,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             write_mes = Instant::now();
             let ic = input_counter.clone();
             let oc = output_counter.clone();
+            input_counter = 0;
+            output_counter = 0;
             thread::spawn(move || write_influxdb(ic, oc));
         }
     }
