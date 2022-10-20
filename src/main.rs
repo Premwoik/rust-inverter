@@ -4,7 +4,6 @@ use reqwest::blocking::Client;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::header::AUTHORIZATION;
-use reqwest::header::CONTENT_LENGTH;
 use reqwest::header::CONTENT_TYPE;
 use std::error::Error;
 use std::thread;
@@ -52,16 +51,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         if write_mes.elapsed().as_secs() >= 300 {
             write_mes = Instant::now();
-            let ic = input_counter.clone();
-            let oc = output_counter.clone();
+            let ic = input_counter as f32 * 0.001;
+            let oc = output_counter as f32 * 0.001;
+            thread::spawn(move || write_influxdb(ic, oc));
+
             input_counter = 0;
             output_counter = 0;
-            thread::spawn(move || write_influxdb(ic, oc));
         }
     }
 }
 
-fn write_influxdb(input_counter: u32, output_counter: u32) -> () {
+fn write_influxdb(input_counter: f32, output_counter: f32) -> () {
     let data = format!("energy_meter,meter_id=331 usage={input_counter}\nenergy_meter,meter_id=332 usage={output_counter}");
     let client = Client::new();
     let url = "http://192.168.2.100:8086/api/v2/write?bucket=default&org=SmartHome";
