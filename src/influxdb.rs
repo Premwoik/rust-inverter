@@ -34,3 +34,11 @@ pub fn write_energy_counters(
     url.set_query(Some(bucket));
     return client.post(url).body(data).send();
 }
+
+pub fn write_io_energy_counters(client: &Client, ic: u32, oc: u32) -> (){
+    let readings = [("331", ic as f32 * 0.001), ("332", oc as f32 * 0.001)];
+    let req = write_energy_counters(&client, &readings);
+    tokio::spawn(async move {
+        assert!(req.await.is_ok(), "Errorrr when writing to influxdb");
+    });
+}

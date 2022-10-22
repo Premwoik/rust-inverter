@@ -1,8 +1,7 @@
-extern crate reqwest;
-
 use std::error::Error;
 use std::time::Duration;
 use std::time::Instant;
+use log::info;
 
 use rppal::gpio::Gpio;
 use rppal::gpio::Trigger;
@@ -48,14 +47,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             _ => (),
         }
         if write_mes.elapsed().as_secs() >= 300 {
+            info!("Writing data from counters to InfluxDB...");
+
+            influxdb::write_io_energy_counters(&client, input_counter, output_counter);
             write_mes = Instant::now();
-            let ic = input_counter as f32 * 0.001;
-            let oc = output_counter as f32 * 0.001;
-            let readings = [("331", ic), ("332", oc)];
-            let req = influxdb::write_energy_counters(&client, &readings);
-            tokio::spawn(async move {
-                assert!(req.await.is_ok(), "Errorrr when writing to influxdb");
-            });
             input_counter = 0;
             output_counter = 0;
         }
