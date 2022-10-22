@@ -1,12 +1,6 @@
 extern crate reqwest;
 
-use reqwest::blocking::Client;
-use reqwest::header::HeaderMap;
-use reqwest::header::HeaderValue;
-use reqwest::header::AUTHORIZATION;
-use reqwest::header::CONTENT_TYPE;
 use std::error::Error;
-use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -16,8 +10,12 @@ use rppal::gpio::Trigger;
 const GPIO_COUNTER_OUTPUT: u8 = 6;
 const GPIO_COUNTER_INPUT: u8 = 5;
 
-fn main() -> Result<(), Box<dyn Error>> {
+mod influxdb;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     let gpio = Gpio::new()?;
+    let client = influxdb::influx_new_client();
 
     let mut input = gpio.get(GPIO_COUNTER_INPUT)?.into_input_pullup();
     input.set_interrupt(Trigger::RisingEdge).ok();
@@ -53,26 +51,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             write_mes = Instant::now();
             let ic = input_counter as f32 * 0.001;
             let oc = output_counter as f32 * 0.001;
-            thread::spawn(move || write_influxdb(ic, oc));
-
+            let readings = [("331", ic), ("332", oc)];
+            let req = influxdb::write_energy_counters(&client, &readings);
+            tokio::spawn(async move {
+                assert!(req.await.is_ok(), "Errorrr when writing to influxdb");
+            });
             input_counter = 0;
             output_counter = 0;
         }
     }
-}
-
-fn write_influxdb(input_counter: f32, output_counter: f32) -> () {
-    let data = format!("energy_meter,meter_id=331 usage={input_counter}\nenergy_meter,meter_id=332 usage={output_counter}");
-    let client = Client::new();
-    let url = "http://192.168.2.100:8086/api/v2/write?bucket=default&org=SmartHome";
-    let mut headers = HeaderMap::new();
-    headers.insert(AUTHORIZATION, HeaderValue::from_static("Bearer fUqLk2fqqb62jyE2PYNpx1mNbu38s75SKN7thO1nKpNqf2vRzb24QWopAlUjh-WM54xJ2KJA2_jXDYzGSlPKDQ=="));
-    headers.insert(CONTENT_TYPE, HeaderValue::from_static("text/plain"));
-    match client.post(url).headers(headers).body(data).send() {
-        Ok(response) => assert!(
-            response.status().is_success(),
-            "Something went wrong when writing to InfluxDB"
-        ),
-        _ => println!("Something went wrong when trying write to InfluxDB"),
-    };
 }
